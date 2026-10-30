@@ -1,0 +1,6 @@
+test/
+__pycache__/
+# Nooit exports of ingevulde flexlijsten in deze openbare repository
+*.csv
+*.xlsx
+!bron/flexlijst-template.xlsx

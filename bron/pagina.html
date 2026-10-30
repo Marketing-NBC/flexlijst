@@ -1,0 +1,503 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>Flexlijst maken</title>
+<style>
+:root{
+  --navy:#1c2430; --navy-2:#2a3442; --cream:#f6f2ea; --paper:#ffffff; --ink:#1c2430; --muted:#5d6673;
+  --line:#e2dccf; --gold:#c9972b; --gold-soft:#f4e7c8; --ok:#2f7a4f; --ok-soft:#e3f1e8; --bad:#a23a2a; --bad-soft:#f8e4df;
+  --radius:12px;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--cream);color:var(--ink);font:16px/1.5 "Segoe UI",system-ui,-apple-system,sans-serif}
+header{background:var(--navy);color:#fafafa;padding:18px 16px}
+header .wrap{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+header b{font-size:20px;letter-spacing:.02em}
+header span{color:#c8cdd4;font-size:14px}
+header i{display:inline-block;width:28px;height:3px;background:var(--gold);vertical-align:middle;margin-right:10px;font-style:normal}
+.wrap{max-width:880px;margin:0 auto}
+main{padding:24px 16px 64px}
+.card{background:var(--paper);border:1px solid var(--line);border-radius:var(--radius);padding:22px;margin-bottom:16px}
+.step{display:flex;gap:14px;align-items:flex-start}
+.num{flex:0 0 30px;height:30px;border-radius:50%;background:var(--navy);color:#fff;display:grid;place-items:center;font-weight:600;font-size:14px}
+.step>div+div{flex:1;min-width:0}
+h2{margin:2px 0 10px;font-size:17px}
+p{margin:6px 0}
+.muted{color:var(--muted);font-size:14px}
+#drop{display:block;border:2px dashed #c9c1b0;border-radius:var(--radius);padding:26px 16px;text-align:center;cursor:pointer;transition:border-color .15s,background .15s}
+#drop:hover,#drop.over{border-color:var(--gold);background:#fffaf0}
+#drop strong{display:block;font-size:17px}
+#file{position:absolute;width:1px;height:1px;opacity:0}
+.pill{display:inline-block;background:var(--gold-soft);color:#6b4f12;border-radius:99px;padding:2px 10px;font-size:13px;font-weight:600}
+select,input[type=date]{font:inherit;padding:8px 10px;border:1px solid #c9c1b0;border-radius:8px;background:#fff;color:var(--ink);max-width:100%}
+label.check{display:flex;gap:10px;align-items:flex-start;margin-top:14px;cursor:pointer}
+label.check input{margin-top:5px;width:18px;height:18px;accent-color:var(--navy)}
+.unknown{display:grid;grid-template-columns:1fr auto;gap:8px 12px;align-items:center;margin-top:10px}
+.msg{border-radius:8px;padding:12px 14px;margin-top:12px;font-size:15px}
+.msg.bad{background:var(--bad-soft);color:var(--bad)}
+.msg.ok{background:var(--ok-soft);color:var(--ok)}
+.msg ul{margin:6px 0 0;padding-left:20px}
+.sections{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px;margin-top:12px}
+.sec{border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.sec h3{margin:0;background:var(--navy-2);color:#fff;font-size:14px;padding:8px 12px;display:flex;justify-content:space-between}
+.sec table{width:100%;border-collapse:collapse;font-size:14px}
+.sec td{padding:6px 12px;border-top:1px solid var(--line);vertical-align:top}
+.sec td:last-child{white-space:nowrap;color:var(--muted);text-align:right;font-variant-numeric:tabular-nums}
+.sec .empty{color:var(--muted);font-style:italic}
+button{font:inherit;font-weight:600;border:0;border-radius:8px;padding:12px 20px;cursor:pointer}
+#download{background:var(--gold);color:#1c2430}
+#download:disabled{background:#d8d2c4;color:#7d7869;cursor:not-allowed}
+#reset{background:transparent;color:var(--muted);text-decoration:underline;padding:12px 8px}
+.actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.hidden{display:none!important}
+footer{color:var(--muted);font-size:13px;text-align:center;padding:0 16px 32px}
+@media (max-width:520px){.unknown{grid-template-columns:1fr}.card{padding:16px}.step{gap:10px}}
+</style>
+</head>
+<body>
+<header><div class="wrap"><b><i></i>Flexlijst maken</b><span>Temper-export → NBC-flexlijst (Excel)</span></div></header>
+<main class="wrap">
+
+  <section class="card">
+    <div class="step"><div class="num">1</div><div>
+      <h2>Temper-export kiezen</h2>
+      <label id="drop" for="file">
+        <strong>Sleep de Temper-CSV hierheen</strong>
+        <span class="muted">of klik om een bestand te kiezen</span>
+      </label>
+      <input id="file" type="file" accept=".csv,text/csv">
+      <p class="muted">Het bestand blijft op deze computer: deze pagina stuurt niets naar internet. Je kunt de ruwe export gewoon gebruiken. Alleen datum, functie, tijden en naam worden gelezen; contactgegevens en tarieven worden genegeerd.</p>
+      <p id="fileinfo" class="hidden"></p>
+      <div id="parseErrors"></div>
+    </div></div>
+  </section>
+
+  <section class="card hidden" id="stepDate">
+    <div class="step"><div class="num">2</div><div>
+      <h2>Datum en controle</h2>
+      <select id="date" aria-label="Datum van de flexlijst"></select>
+      <label class="check"><input id="accepted" type="checkbox">
+        <span>Deze export bevat alleen <strong>geaccepteerde</strong> mensen.<br><span class="muted">De Temper-export heeft geen statuskolom, dus dit kan de pagina niet zelf controleren.</span></span>
+      </label>
+    </div></div>
+  </section>
+
+  <section class="card hidden" id="stepUnknown">
+    <div class="step"><div class="num">!</div><div>
+      <h2>Onbekende functies indelen</h2>
+      <p class="muted">Deze functies staan nog niet in de vaste indeling. Kies de afdeling; je keuze wordt in deze browser onthouden.</p>
+      <div id="unknownList"></div>
+    </div></div>
+  </section>
+
+  <section class="card hidden" id="stepPreview">
+    <div class="step"><div class="num">3</div><div>
+      <h2>Controleren en downloaden</h2>
+      <div id="problems"></div>
+      <div id="summary"></div>
+      <div class="sections" id="sections"></div>
+      <div class="actions" style="margin-top:16px">
+        <button id="download" type="button" disabled>Download flexlijst (.xlsx)</button>
+        <button id="reset" type="button">Opnieuw beginnen</button>
+      </div>
+      <div id="done"></div>
+    </div></div>
+  </section>
+</main>
+<footer>Sjabloon: Flexlijst extern personeel (NBC). Werkt offline.</footer>
+
+<script>
+'use strict';
+// Lege goedgekeurde flexlijst, door build.py uit bron/flexlijst-template.xlsx ingevoegd.
+const TEMPLATE = /*__TEMPLATE_PARTS__*/null;
+
+// Functie (Job) -> afdeling. Nieuwe vaste functies hier toevoegen.
+const MAPPING = {
+  'Medewerker Hospitality': 'Events & Hospitality',
+  'Medewerker Staging': 'Staging',
+  'Garderobemedewerker': 'Garderobe',
+  'Spoelkeuken Spetter': 'Spoelkeuken',
+  'Keukenhulp': 'Keuken'
+};
+// [afdeling, koprij, kolomkoprij, eerste dienstregel] in het sjabloon; elke afdeling heeft 2 lege dienstregels.
+const SECTIONS = [
+  ['Events & Hospitality', 3, 4, 5],
+  ['Staging', 7, 8, 9],
+  ['Garderobe', 11, 12, 13],
+  ['Spoelkeuken', 15, 16, 17],
+  ['Keuken', 19, 20, 21],
+  ['Schoonmaak', 23, 24, 25]
+];
+const CAPACITY = 2;
+const FILLED_STYLE = '150';  // Area Normal 10, wit, dunne zwarte rand, verticaal midden, terugloop
+const EXTERNAL_PARTY = 'Temper';
+const HEADERS = {
+  'shift datum': 'date', 'shift date': 'date',
+  'job': 'job',
+  'shift starttijd': 'start', 'shift start time': 'start',
+  'shift eindtijd': 'end', 'shift end time': 'end',
+  'freeflexer': 'name'
+};
+const FIELD_LABEL = {date: 'Shift datum', job: 'Job', start: 'Shift starttijd', end: 'Shift eindtijd', name: 'FreeFlexer'};
+const STORE_KEY = 'nbc-flexlijst-extra-functies';
+const NS = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
+
+const $ = id => document.getElementById(id);
+let state = null;
+let extraMapping = loadExtra();
+
+function loadExtra() {
+  try { return JSON.parse(localStorage.getItem(STORE_KEY)) || {}; } catch { return {}; }
+}
+function saveExtra() {
+  try { localStorage.setItem(STORE_KEY, JSON.stringify(extraMapping)); } catch {}
+}
+function plural(n) { return `${n} ${n === 1 ? 'dienst' : 'diensten'}`; }
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
+}
+
+// ---------- CSV ----------
+function detectDelimiter(text) {
+  const first = text.split(/\r?\n/, 1)[0];
+  let best = ',', bestCount = -1;
+  for (const d of [';', ',', '\t']) {
+    let n = 0, q = false;
+    for (const c of first) { if (c === '"') q = !q; else if (c === d && !q) n++; }
+    if (n > bestCount) { best = d; bestCount = n; }
+  }
+  return best;
+}
+function parseCSV(text) {
+  const d = detectDelimiter(text), rows = [];
+  let row = [], cell = '', q = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (q) {
+      if (c === '"') { if (text[i + 1] === '"') { cell += '"'; i++; } else q = false; }
+      else cell += c;
+    } else if (c === '"') q = true;
+    else if (c === d) { row.push(cell); cell = ''; }
+    else if (c === '\n' || c === '\r') {
+      if (c === '\r' && text[i + 1] === '\n') i++;
+      row.push(cell); rows.push(row); row = []; cell = '';
+    } else cell += c;
+  }
+  if (cell !== '' || row.length) { row.push(cell); rows.push(row); }
+  return rows.filter(r => r.some(v => v.trim() !== ''));
+}
+function parseDate(s) {
+  s = s.trim().split(/[ T]/)[0];
+  let m = s.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})$/);
+  if (m) return iso(+m[3], +m[2], +m[1]);
+  m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+  if (m) return iso(+m[1], +m[2], +m[3]);
+  return null;
+}
+function iso(y, mo, d) {
+  const dt = new Date(Date.UTC(y, mo - 1, d));
+  if (dt.getUTCFullYear() !== y || dt.getUTCMonth() !== mo - 1 || dt.getUTCDate() !== d) return null;
+  return `${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+}
+function parseTime(s) {
+  const m = s.trim().match(/(?:^|\s)(\d{1,2}):(\d{2})(?::\d{2})?$/);
+  if (!m || +m[1] > 24 || +m[2] > 59) return null;
+  return `${m[1].padStart(2, '0')}:${m[2]}`;
+}
+
+async function readFile(file) {
+  const buf = await file.arrayBuffer();
+  let text = new TextDecoder('utf-8').decode(buf);
+  if (text.includes('�')) text = new TextDecoder('windows-1252').decode(buf);
+  return text.replace(/^﻿/, '');
+}
+
+function load(fileName, text) {
+  const rows = parseCSV(text);
+  const errors = [];
+  if (rows.length < 2) { showParseErrors(['Het bestand bevat geen diensten.']); return; }
+  const idx = {};
+  rows[0].forEach((h, i) => {
+    const key = HEADERS[h.trim().toLowerCase()];
+    if (!key) return;
+    if (key in idx) errors.push(`Kolom "${FIELD_LABEL[key]}" komt dubbel voor.`);
+    idx[key] = i;
+  });
+  const missing = Object.keys(FIELD_LABEL).filter(k => !(k in idx)).map(k => FIELD_LABEL[k]);
+  if (missing.length) errors.push('Ontbrekende kolommen: ' + missing.join(', ') + '. Is dit een Temper-export van geplande diensten?');
+  if (errors.length) { showParseErrors(errors); return; }
+
+  const shifts = [], bad = [];
+  rows.slice(1).forEach((r, i) => {
+    const line = i + 2, get = k => (r[idx[k]] ?? '').trim();
+    const date = parseDate(get('date')), start = parseTime(get('start')), end = parseTime(get('end'));
+    if (!date) { bad.push(`Regel ${line}: datum "${get('date')}" niet herkend.`); return; }
+    shifts.push({line, date, name: get('name'), job: get('job'), start, end,
+      rawStart: get('start'), rawEnd: get('end')});
+  });
+  if (!shifts.length) { showParseErrors(['Geen bruikbare diensten gevonden.', ...bad]); return; }
+
+  const dates = new Map();
+  for (const s of shifts) dates.set(s.date, (dates.get(s.date) || 0) + 1);
+  state = {fileName, shifts, dates, dateErrors: bad};
+  showParseErrors([]);
+  $('fileinfo').innerHTML = `<span class="pill">${esc(fileName)}</span> ${plural(shifts.length)} op ${dates.size} ${dates.size === 1 ? 'datum' : 'datums'}`;
+  $('fileinfo').classList.remove('hidden');
+
+  const sel = $('date');
+  const sorted = [...dates.keys()].sort();
+  sel.innerHTML = (sorted.length > 1 ? '<option value="">Kies de datum…</option>' : '') +
+    sorted.map(d => `<option value="${d}">${esc(longDate(d))} — ${plural(dates.get(d))}</option>`).join('');
+  $('accepted').checked = false;
+  $('stepDate').classList.remove('hidden');
+  $('done').innerHTML = '';
+  render();
+}
+function showParseErrors(list) {
+  $('parseErrors').innerHTML = list.length
+    ? `<div class="msg bad"><strong>Dit bestand kan niet gebruikt worden.</strong><ul>${list.map(e => `<li>${esc(e)}</li>`).join('')}</ul></div>` : '';
+  if (list.length) { state = null; ['stepDate', 'stepUnknown', 'stepPreview', 'fileinfo'].forEach(id => $(id).classList.add('hidden')); }
+}
+function longDate(d) {
+  const [y, m, day] = d.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, day)).toLocaleDateString('nl-NL', {weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC'});
+}
+
+// ---------- Indelen en controleren ----------
+function sectionFor(job) { return MAPPING[job] || extraMapping[job] || null; }
+
+function evaluate() {
+  const date = $('date').value;
+  const day = date ? state.shifts.filter(s => s.date === date) : [];
+  const problems = [], unknown = new Map(), seen = new Map();
+  const groups = Object.fromEntries(SECTIONS.map(s => [s[0], []]));
+  for (const s of day) {
+    if (!s.name) problems.push(`Regel ${s.line}: naam ontbreekt (dienst nog niet ingevuld?).`);
+    if (!s.start || !s.end) problems.push(`Regel ${s.line}: tijd "${s.rawStart} - ${s.rawEnd}" niet herkend.`);
+    const key = [s.name, s.job, s.start, s.end].join('|');
+    if (seen.has(key)) problems.push(`Regel ${s.line} is een exacte kopie van regel ${seen.get(key)} (${s.name}, ${s.start} - ${s.end}). Controleer de export.`);
+    else seen.set(key, s.line);
+    const sec = sectionFor(s.job);
+    if (!MAPPING[s.job]) unknown.set(s.job, (unknown.get(s.job) || 0) + 1);
+    if (sec && groups[sec]) groups[sec].push(s);
+  }
+  for (const list of Object.values(groups))
+    list.sort((a, b) => (a.start || '').localeCompare(b.start || '') || a.name.localeCompare(b.name, 'nl', {sensitivity: 'base'}) || (a.end || '').localeCompare(b.end || ''));
+  const unassigned = [...unknown.keys()].filter(j => !sectionFor(j));
+  return {date, day, groups, problems, unknown, unassigned};
+}
+
+function render() {
+  if (!state) return;
+  const ev = evaluate();
+  // Onbekende functies
+  const uk = $('stepUnknown');
+  if (ev.unknown.size) {
+    uk.classList.remove('hidden');
+    $('unknownList').innerHTML = [...ev.unknown].map(([job, n]) => `
+      <div class="unknown"><span><strong>${esc(job || '(lege functie)')}</strong> <span class="muted">· ${plural(n)}</span></span>
+      <select data-job="${esc(job)}"><option value="">Kies afdeling…</option>${SECTIONS.map(s =>
+        `<option${extraMapping[job] === s[0] ? ' selected' : ''}>${esc(s[0])}</option>`).join('')}</select></div>`).join('');
+  } else uk.classList.add('hidden');
+
+  const pv = $('stepPreview');
+  if (!ev.date) { pv.classList.add('hidden'); return; }
+  pv.classList.remove('hidden');
+
+  const blockers = [...ev.problems];
+  if (ev.unassigned.length) blockers.push(`Kies eerst een afdeling voor: ${ev.unassigned.join(', ')}.`);
+  if (!$('accepted').checked) blockers.push('Bevestig bij stap 2 dat de export alleen geaccepteerde mensen bevat.');
+  $('problems').innerHTML = blockers.length
+    ? `<div class="msg bad"><strong>Nog niet klaar:</strong><ul>${blockers.map(e => `<li>${esc(e)}</li>`).join('')}</ul></div>` : '';
+  const total = Object.values(ev.groups).reduce((n, l) => n + l.length, 0);
+  $('summary').innerHTML = `<p><strong>${plural(total)}</strong> op ${esc(longDate(ev.date))}` +
+    (state.dates.size > 1 ? ` <span class="muted">(${plural(state.shifts.length - ev.day.length)} op andere datums ${state.shifts.length - ev.day.length === 1 ? 'wordt' : 'worden'} overgeslagen)</span>` : '') + '</p>';
+  $('sections').innerHTML = SECTIONS.map(([sec]) => {
+    const list = ev.groups[sec];
+    return `<div class="sec"><h3><span>${esc(sec)}</span><span>${list.length}</span></h3><table>${
+      list.length ? list.map(s => `<tr><td>${esc(s.name)}</td><td>${s.start} - ${s.end}</td></tr>`).join('')
+        : '<tr><td class="empty" colspan="2">Geen diensten (2 lege regels)</td></tr>'}</table></div>`;
+  }).join('');
+  $('download').disabled = blockers.length > 0;
+  state.ready = blockers.length ? null : ev;
+}
+
+// ---------- Excel ----------
+function colOf(ref) { return ref.replace(/\d+/g, ''); }
+function colIndex(col) { let n = 0; for (const c of col) n = n * 26 + c.charCodeAt(0) - 64; return n; }
+
+function buildSheet(ev) {
+  const doc = new DOMParser().parseFromString(TEMPLATE['xl/worksheets/sheet1.xml'], 'application/xml');
+  const sheetData = doc.getElementsByTagNameNS(NS, 'sheetData')[0];
+  const tpl = new Map([...sheetData.getElementsByTagNameNS(NS, 'row')].map(r => [+r.getAttribute('r'), r]));
+  const lastTemplateRow = Math.max(...tpl.keys());
+  const out = new Map();    // rij -> {from: sjabloonrij voor A:K, values, height}
+  const merges = ['A1:K1', 'C2:K2'];
+
+  out.set(1, {from: 1}); out.set(2, {from: 2, date: true});
+  let row = 3;
+  for (const [sec, heading, header, first] of SECTIONS) {
+    merges.push(`A${row}:K${row}`);
+    out.set(row++, {from: heading});
+    out.set(row++, {from: header});
+    const list = ev.groups[sec];
+    for (let i = 0; i < Math.max(CAPACITY, list.length); i++) {
+      const s = list[i];
+      out.set(row++, {from: first + Math.min(i, CAPACITY - 1), data: true,
+        values: s ? [s.name, `${s.start} - ${s.end}`, sec, EXTERNAL_PARTY] : null});
+    }
+  }
+  const lastRow = Math.max(row - 1, lastTemplateRow);
+
+  const newData = doc.createElementNS(NS, 'sheetData');
+  for (let r = 1; r <= lastRow; r++) {
+    const spec = out.get(r);
+    const src = spec ? tpl.get(spec.from) : null;
+    const own = tpl.get(r);       // kolommen L:N (legenda) blijven op hun eigen rij staan
+    const base = src || own;
+    const el = base ? base.cloneNode(false) : doc.createElementNS(NS, 'row');
+    el.setAttribute('r', r);
+    if (spec && spec.data) { el.setAttribute('ht', '30'); el.setAttribute('customHeight', '1'); }
+    const cells = [];
+    if (src) for (const c of src.getElementsByTagNameNS(NS, 'c'))
+      if (colIndex(colOf(c.getAttribute('r'))) <= 11) cells.push(c.cloneNode(true));
+    if (own) for (const c of own.getElementsByTagNameNS(NS, 'c'))
+      if (colIndex(colOf(c.getAttribute('r'))) >= 12) cells.push(c.cloneNode(true));
+    for (const c of cells) {
+      const col = colOf(c.getAttribute('r'));
+      c.setAttribute('r', col + r);
+      if (spec && spec.values && colIndex(col) <= 4) { setText(doc, c, spec.values[colIndex(col) - 1]); c.setAttribute('s', FILLED_STYLE); }
+      if (spec && spec.date && col === 'C') setNumber(doc, c, excelDate(ev.date));
+    }
+    cells.sort((a, b) => colIndex(colOf(a.getAttribute('r'))) - colIndex(colOf(b.getAttribute('r'))));
+    cells.forEach(c => el.appendChild(c));
+    newData.appendChild(el);
+  }
+  sheetData.parentNode.replaceChild(newData, sheetData);
+
+  const mc = doc.getElementsByTagNameNS(NS, 'mergeCells')[0];
+  while (mc.firstChild) mc.removeChild(mc.firstChild);
+  for (const ref of merges) { const m = doc.createElementNS(NS, 'mergeCell'); m.setAttribute('ref', ref); mc.appendChild(m); }
+  mc.setAttribute('count', merges.length);
+  doc.getElementsByTagNameNS(NS, 'dimension')[0].setAttribute('ref', `A1:N${lastRow}`);
+
+  return {xml: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' + new XMLSerializer().serializeToString(doc), lastRow};
+}
+function setText(doc, c, text) {
+  while (c.firstChild) c.removeChild(c.firstChild);
+  c.setAttribute('t', 'inlineStr');
+  const is = doc.createElementNS(NS, 'is'), t = doc.createElementNS(NS, 't');
+  t.setAttributeNS('http://www.w3.org/XML/1998/namespace', 'xml:space', 'preserve');
+  t.textContent = text;
+  is.appendChild(t); c.appendChild(is);
+}
+function setNumber(doc, c, n) {
+  while (c.firstChild) c.removeChild(c.firstChild);
+  c.setAttribute('t', 'n');
+  const v = doc.createElementNS(NS, 'v'); v.textContent = String(n); c.appendChild(v);
+}
+function excelDate(isoDate) {
+  const [y, m, d] = isoDate.split('-').map(Number);
+  return (Date.UTC(y, m - 1, d) - Date.UTC(1899, 11, 30)) / 86400000;
+}
+
+// Controle achteraf: lees de gegenereerde sheet terug en vergelijk met wat er in moest.
+function verify(xml, ev) {
+  const doc = new DOMParser().parseFromString(xml, 'application/xml');
+  if (doc.getElementsByTagName('parsererror').length) throw new Error('Gegenereerde XML is ongeldig.');
+  const names = [];
+  for (const r of doc.getElementsByTagNameNS(NS, 'row')) {
+    const a = [...r.getElementsByTagNameNS(NS, 'c')].find(c => colOf(c.getAttribute('r')) === 'A');
+    const d = [...r.getElementsByTagNameNS(NS, 'c')].find(c => colOf(c.getAttribute('r')) === 'D');
+    if (d && d.textContent === EXTERNAL_PARTY) {
+      names.push(a.textContent);
+      if (r.getAttribute('ht') !== '30') throw new Error(`Rij ${r.getAttribute('r')} heeft niet de vaste hoogte van 30.`);
+    }
+  }
+  const expected = SECTIONS.flatMap(([sec]) => ev.groups[sec].map(s => s.name));
+  if (JSON.stringify(names) !== JSON.stringify(expected)) throw new Error('Controle mislukt: namen in de Excel wijken af van de lijst.');
+  return names.length;
+}
+
+// Minimale zip-schrijver (ongecomprimeerd), genoeg voor een .xlsx.
+const CRC_TABLE = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+function crc32(bytes) { let c = 0xFFFFFFFF; for (const b of bytes) c = CRC_TABLE[(c ^ b) & 0xFF] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
+function zip(files) {
+  const enc = new TextEncoder(), parts = [], central = [];
+  let offset = 0;
+  const now = new Date();
+  const dosTime = (now.getHours() << 11) | (now.getMinutes() << 5) | (now.getSeconds() >> 1);
+  const dosDate = ((now.getFullYear() - 1980) << 9) | ((now.getMonth() + 1) << 5) | now.getDate();
+  for (const [name, content] of files) {
+    const nameBytes = enc.encode(name), data = enc.encode(content), crc = crc32(data);
+    const local = new DataView(new ArrayBuffer(30));
+    [[0, 0x04034b50, 4], [4, 20, 2], [6, 0x0800, 2], [8, 0, 2], [10, dosTime, 2], [12, dosDate, 2], [14, crc, 4],
+     [18, data.length, 4], [22, data.length, 4], [26, nameBytes.length, 2], [28, 0, 2]]
+      .forEach(([o, v, s]) => s === 4 ? local.setUint32(o, v, true) : local.setUint16(o, v, true));
+    const cd = new DataView(new ArrayBuffer(46));
+    [[0, 0x02014b50, 4], [4, 20, 2], [6, 20, 2], [8, 0x0800, 2], [10, 0, 2], [12, dosTime, 2], [14, dosDate, 2], [16, crc, 4],
+     [20, data.length, 4], [24, data.length, 4], [28, nameBytes.length, 2], [30, 0, 2], [32, 0, 2], [34, 0, 2], [36, 0, 2], [38, 0, 4], [42, offset, 4]]
+      .forEach(([o, v, s]) => s === 4 ? cd.setUint32(o, v, true) : cd.setUint16(o, v, true));
+    parts.push(new Uint8Array(local.buffer), nameBytes, data);
+    central.push(new Uint8Array(cd.buffer), nameBytes);
+    offset += 30 + nameBytes.length + data.length;
+  }
+  const cdSize = central.reduce((n, p) => n + p.length, 0);
+  const end = new DataView(new ArrayBuffer(22));
+  [[0, 0x06054b50, 4], [4, 0, 2], [6, 0, 2], [8, files.length, 2], [10, files.length, 2], [12, cdSize, 4], [16, offset, 4], [20, 0, 2]]
+    .forEach(([o, v, s]) => s === 4 ? end.setUint32(o, v, true) : end.setUint16(o, v, true));
+  return new Blob([...parts, ...central, new Uint8Array(end.buffer)], {type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+}
+
+function download() {
+  const ev = state && state.ready;
+  if (!ev) return;
+  try {
+    const {xml} = buildSheet(ev);
+    const count = verify(xml, ev);
+    const files = Object.entries(TEMPLATE).map(([name, content]) => [name, name === 'xl/worksheets/sheet1.xml' ? xml : content]);
+    const url = URL.createObjectURL(zip(files));
+    const a = document.createElement('a');
+    a.href = url; a.download = `Flexlijst-${ev.date}.xlsx`;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+    $('done').innerHTML = `<div class="msg ok">Flexlijst-${ev.date}.xlsx is gedownload: ${count} diensten, gecontroleerd tegen de lijst hierboven.</div>`;
+  } catch (e) {
+    $('done').innerHTML = `<div class="msg bad">${esc(e.message)}</div>`;
+  }
+}
+
+// ---------- Events ----------
+async function handleFile(file) {
+  if (!file) return;
+  try { load(file.name, await readFile(file)); }
+  catch (e) { showParseErrors(['Bestand kon niet gelezen worden: ' + e.message]); }
+}
+$('file').addEventListener('change', e => handleFile(e.target.files[0]));
+const drop = $('drop');
+['dragenter', 'dragover'].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.add('over'); }));
+['dragleave', 'drop'].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.remove('over'); }));
+drop.addEventListener('drop', e => handleFile(e.dataTransfer.files[0]));
+window.addEventListener('dragover', e => e.preventDefault());
+window.addEventListener('drop', e => e.preventDefault());
+$('date').addEventListener('change', () => { $('done').innerHTML = ''; render(); });
+$('accepted').addEventListener('change', render);
+$('unknownList').addEventListener('change', e => {
+  const job = e.target.dataset.job;
+  if (job === undefined) return;
+  if (e.target.value) extraMapping[job] = e.target.value; else delete extraMapping[job];
+  saveExtra(); render();
+});
+$('download').addEventListener('click', download);
+$('reset').addEventListener('click', () => {
+  state = null; $('file').value = '';
+  ['stepDate', 'stepUnknown', 'stepPreview', 'fileinfo'].forEach(id => $(id).classList.add('hidden'));
+  $('parseErrors').innerHTML = ''; $('done').innerHTML = '';
+});
+</script>
+</body>
+</html>

@@ -32,6 +32,11 @@ p{margin:6px 0}
 #drop:hover,#drop.over{border-color:var(--gold);background:#fffaf0}
 #drop strong{display:block;font-size:17px}
 #file{position:absolute;width:1px;height:1px;opacity:0}
+#files{list-style:none;margin:12px 0 0;padding:0}
+#files li{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:8px 0;border-top:1px solid var(--line)}
+#files li span.name{overflow-wrap:anywhere}
+#files button{padding:4px 8px;background:transparent;color:var(--muted);text-decoration:underline;font-weight:400;font-size:14px}
+.tag{font-size:12px;color:var(--muted);margin-left:6px}
 .pill{display:inline-block;background:var(--gold-soft);color:#6b4f12;border-radius:99px;padding:2px 10px;font-size:13px;font-weight:600}
 select,input[type=date]{font:inherit;padding:8px 10px;border:1px solid #c9c1b0;border-radius:8px;background:#fff;color:var(--ink);max-width:100%}
 label.check{display:flex;gap:10px;align-items:flex-start;margin-top:14px;cursor:pointer}
@@ -40,6 +45,7 @@ label.check input{margin-top:5px;width:18px;height:18px;accent-color:var(--navy)
 .msg{border-radius:8px;padding:12px 14px;margin-top:12px;font-size:15px}
 .msg.bad{background:var(--bad-soft);color:var(--bad)}
 .msg.ok{background:var(--ok-soft);color:var(--ok)}
+.msg.info{background:var(--gold-soft);color:#6b4f12}
 .msg ul{margin:6px 0 0;padding-left:20px}
 .sections{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px;margin-top:12px}
 .sec{border:1px solid var(--line);border-radius:10px;overflow:hidden}
@@ -59,19 +65,19 @@ footer{color:var(--muted);font-size:13px;text-align:center;padding:0 16px 32px}
 </style>
 </head>
 <body>
-<header><div class="wrap"><b><i></i>Flexlijst maken</b><span>Temper-export → NBC-flexlijst (Excel)</span></div></header>
+<header><div class="wrap"><b><i></i>Flexlijst maken</b><span>Temper, Piekfijn en Dish → één NBC-flexlijst (Excel)</span></div></header>
 <main class="wrap">
 
   <section class="card">
     <div class="step"><div class="num">1</div><div>
-      <h2>Temper-export kiezen</h2>
+      <h2>Exports kiezen</h2>
       <label id="drop" for="file">
-        <strong>Sleep de Temper-CSV hierheen</strong>
-        <span class="muted">of klik om een bestand te kiezen</span>
+        <strong>Sleep de exports hierheen</strong>
+        <span class="muted">Temper-CSV, Piekfijn-presentielijst (PDF) en/of Dish-planning (PDF) · of klik om te kiezen</span>
       </label>
-      <input id="file" type="file" accept=".csv,text/csv">
-      <p class="muted">Het bestand blijft op deze computer: deze pagina stuurt niets naar internet. Je kunt de ruwe export gewoon gebruiken. Alleen datum, functie, tijden en naam worden gelezen; contactgegevens en tarieven worden genegeerd.</p>
-      <p id="fileinfo" class="hidden"></p>
+      <input id="file" type="file" accept=".csv,.pdf,text/csv,application/pdf" multiple>
+      <p class="muted">De bestanden blijven op deze computer: deze pagina stuurt niets naar internet en bewaart niets. Je kunt de ruwe exports gewoon gebruiken. Alleen datum, functie of afdeling, tijden en naam worden gelezen; telefoonnummers, contactgegevens en tarieven worden genegeerd.</p>
+      <ul id="files" class="hidden"></ul>
       <div id="parseErrors"></div>
     </div></div>
   </section>
@@ -80,8 +86,8 @@ footer{color:var(--muted);font-size:13px;text-align:center;padding:0 16px 32px}
     <div class="step"><div class="num">2</div><div>
       <h2>Datum en controle</h2>
       <select id="date" aria-label="Datum van de flexlijst"></select>
-      <label class="check"><input id="accepted" type="checkbox">
-        <span>Deze export bevat alleen <strong>geaccepteerde</strong> mensen.<br><span class="muted">De Temper-export heeft geen statuskolom, dus dit kan de pagina niet zelf controleren.</span></span>
+      <label class="check" id="acceptedBox"><input id="accepted" type="checkbox">
+        <span>De Temper-export bevat alleen <strong>geaccepteerde</strong> mensen.<br><span class="muted">De Temper-export heeft geen statuskolom, dus dit kan de pagina niet zelf controleren.</span></span>
       </label>
     </div></div>
   </section>
@@ -108,7 +114,7 @@ footer{color:var(--muted);font-size:13px;text-align:center;padding:0 16px 32px}
     </div></div>
   </section>
 </main>
-<footer>Sjabloon: Flexlijst extern personeel (NBC). Werkt offline.</footer>
+<footer>Sjabloon: Flexlijst extern personeel (NBC). Werkt offline. PDF's worden gelezen met pdf.js (Apache-2.0).</footer>
 
 <script>
 'use strict';
@@ -116,12 +122,14 @@ footer{color:var(--muted);font-size:13px;text-align:center;padding:0 16px 32px}
 const TEMPLATE = /*__TEMPLATE_PARTS__*/null;
 
 // Functie (Job) -> afdeling. Nieuwe vaste functies hier toevoegen.
+// Een functie die precies zo heet als een afdeling (zoals 'Keuken' uit Dish) gaat vanzelf naar die afdeling.
 const MAPPING = {
   'Medewerker Hospitality': 'Events & Hospitality',
   'Medewerker Staging': 'Staging',
   'Garderobemedewerker': 'Garderobe',
   'Spoelkeuken Spetter': 'Spoelkeuken',
-  'Keukenhulp': 'Keuken'
+  'Keukenhulp': 'Keuken',
+  'Bediening': 'Events & Hospitality'
 };
 // [afdeling, koprij, kolomkoprij, eerste dienstregel] in het sjabloon; elke afdeling heeft 2 lege dienstregels.
 const SECTIONS = [
@@ -132,9 +140,12 @@ const SECTIONS = [
   ['Keuken', 19, 20, 21],
   ['Schoonmaak', 23, 24, 25]
 ];
+const SECTION_NAMES = new Set(SECTIONS.map(s => s[0]));
 const CAPACITY = 2;
 const FILLED_STYLE = '150';  // Area Normal 10, wit, dunne zwarte rand, verticaal midden, terugloop
-const EXTERNAL_PARTY = 'Temper';
+// Externe partij (kolom D) per soort export.
+const PARTY = {temper: 'Temper', piekfijn: 'Piekfijn', dish: 'Dish (ZZP)'};
+const PARTIES = new Set(Object.values(PARTY));
 const HEADERS = {
   'shift datum': 'date', 'shift date': 'date',
   'job': 'job',
@@ -143,11 +154,15 @@ const HEADERS = {
   'freeflexer': 'name'
 };
 const FIELD_LABEL = {date: 'Shift datum', job: 'Job', start: 'Shift starttijd', end: 'Shift eindtijd', name: 'FreeFlexer'};
+const MONTHS = ['januari', 'februari', 'maart', 'april', 'mei', 'juni', 'juli', 'augustus', 'september', 'oktober', 'november', 'december'];
+const PDF_GAP = 6;  // pt; kleiner gat = zelfde cel (bijv. naam en telefoonnummer in Dish)
 const STORE_KEY = 'nbc-flexlijst-extra-functies';
 const NS = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
 
 const $ = id => document.getElementById(id);
-let state = null;
+let files = [];      // ingelezen exports: {id, fileName, party, shifts}
+let nextId = 1;
+let state = null;    // {ready} zodra de lijst gedownload kan worden
 let extraMapping = loadExtra();
 
 function loadExtra() {
@@ -160,8 +175,13 @@ function plural(n) { return `${n} ${n === 1 ? 'dienst' : 'diensten'}`; }
 function esc(s) {
   return String(s).replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
 }
+// Alleen de naam bewaren: telefoonnummers, e-mailadressen en het voorvoegsel 'Zzp' gaan er direct af.
+function cleanName(s) {
+  return s.replace(/\S+@\S+/g, ' ').replace(/\+?\d[\d\s().-]{6,}\d/g, ' ').replace(/^\s*zzp\b\s*/i, '').replace(/\s+/g, ' ').trim();
+}
+function timeText(s) { return s.noEnd ? `vanaf ${s.start}` : `${s.start} - ${s.end}`; }
 
-// ---------- CSV ----------
+// ---------- CSV (Temper) ----------
 function detectDelimiter(text) {
   const first = text.split(/\r?\n/, 1)[0];
   let best = ',', bestCount = -1;
@@ -198,6 +218,10 @@ function parseDate(s) {
   if (m) return iso(+m[1], +m[2], +m[3]);
   return null;
 }
+function parseLongDate(s) {
+  const m = s.toLowerCase().match(new RegExp(`(\\d{1,2})\\s+(${MONTHS.join('|')})\\s+(\\d{4})`));
+  return m ? iso(+m[3], MONTHS.indexOf(m[2]) + 1, +m[1]) : null;
+}
 function iso(y, mo, d) {
   const dt = new Date(Date.UTC(y, mo - 1, d));
   if (dt.getUTCFullYear() !== y || dt.getUTCMonth() !== mo - 1 || dt.getUTCDate() !== d) return null;
@@ -209,17 +233,18 @@ function parseTime(s) {
   return `${m[1].padStart(2, '0')}:${m[2]}`;
 }
 
-async function readFile(file) {
+async function readText(file) {
   const buf = await file.arrayBuffer();
   let text = new TextDecoder('utf-8').decode(buf);
   if (text.includes('�')) text = new TextDecoder('windows-1252').decode(buf);
   return text.replace(/^﻿/, '');
 }
 
-function load(fileName, text) {
+// Geeft {shifts, bad} of {errors}.
+function parseTemper(text) {
   const rows = parseCSV(text);
   const errors = [];
-  if (rows.length < 2) { showParseErrors(['Het bestand bevat geen diensten.']); return; }
+  if (rows.length < 2) return {errors: ['Het bestand bevat geen diensten.']};
   const idx = {};
   rows[0].forEach((h, i) => {
     const key = HEADERS[h.trim().toLowerCase()];
@@ -229,38 +254,158 @@ function load(fileName, text) {
   });
   const missing = Object.keys(FIELD_LABEL).filter(k => !(k in idx)).map(k => FIELD_LABEL[k]);
   if (missing.length) errors.push('Ontbrekende kolommen: ' + missing.join(', ') + '. Is dit een Temper-export van geplande diensten?');
-  if (errors.length) { showParseErrors(errors); return; }
+  if (errors.length) return {errors};
 
   const shifts = [], bad = [];
   rows.slice(1).forEach((r, i) => {
     const line = i + 2, get = k => (r[idx[k]] ?? '').trim();
     const date = parseDate(get('date')), start = parseTime(get('start')), end = parseTime(get('end'));
-    if (!date) { bad.push(`Regel ${line}: datum "${get('date')}" niet herkend.`); return; }
-    shifts.push({line, date, name: get('name'), job: get('job'), start, end,
+    if (!date) { bad.push(`regel ${line}: datum "${get('date')}" niet herkend.`); return; }
+    shifts.push({where: `regel ${line}`, date, name: cleanName(get('name')), job: get('job'), start, end,
       rawStart: get('start'), rawEnd: get('end')});
   });
-  if (!shifts.length) { showParseErrors(['Geen bruikbare diensten gevonden.', ...bad]); return; }
+  return {party: PARTY.temper, shifts, bad};
+}
+
+// ---------- PDF (Piekfijn, Dish) ----------
+// Leest de tekst van een PDF als regels met cellen [{x, text}], van boven naar beneden.
+async function pdfRows(buf) {
+  const lib = globalThis.pdfjsLib;
+  if (!lib) throw new Error('De PDF-lezer is niet geladen. Herlaad de pagina.');
+  const doc = await lib.getDocument({data: new Uint8Array(buf), isEvalSupported: false, disableFontFace: true,
+    useSystemFonts: false, verbosity: 0}).promise;
+  const rows = [];
+  try {
+    for (let p = 1; p <= doc.numPages; p++) {
+      const items = (await (await doc.getPage(p)).getTextContent()).items
+        .filter(it => it.str && it.str.trim())
+        .map(it => ({x: it.transform[4], y: it.transform[5], end: it.transform[4] + it.width, str: it.str}))
+        .sort((a, b) => b.y - a.y || a.x - b.x);
+      const lines = [];
+      for (const it of items) {
+        const line = lines[lines.length - 1];
+        if (line && Math.abs(line.y - it.y) <= 2) line.items.push(it); else lines.push({y: it.y, items: [it]});
+      }
+      for (const line of lines) {
+        const cells = [];
+        for (const it of line.items.sort((a, b) => a.x - b.x)) {
+          const cur = cells[cells.length - 1];
+          if (cur && it.x - cur.end <= PDF_GAP) { cur.text += (it.x - cur.end > 0.5 ? ' ' : '') + it.str; cur.end = it.end; }
+          else cells.push({x: it.x, end: it.end, text: it.str});
+        }
+        cells.forEach(c => { c.text = c.text.replace(/\s+/g, ' ').trim(); });
+        rows.push(cells);
+      }
+    }
+  } finally { doc.destroy(); }
+  return rows;
+}
+function hasAll(cells, words) {
+  const set = new Set(cells.map(c => c.text.toLowerCase()));
+  return words.every(w => set.has(w));
+}
+
+// Piekfijn presentielijst: Datum | Medewerker | Functie | Positie | Starttijd | Eindtijd | Handtekening
+function parsePiekfijn(rows) {
+  let cols = null, n = 0;
+  const shifts = [];
+  for (const cells of rows) {
+    if (hasAll(cells, ['datum', 'medewerker', 'functie', 'starttijd', 'eindtijd'])) {
+      cols = cells.map(c => ({x: c.x, key: c.text.toLowerCase()}));
+      continue;
+    }
+    if (!cols || !cells.length || !/^\d{1,2}-\d{1,2}-\d{4}$/.test(cells[0].text)) continue;
+    const row = {};
+    for (const c of cells) {
+      const col = cols.filter(h => h.x <= c.x + 3).pop();
+      if (col) row[col.key] = row[col.key] ? row[col.key] + ' ' + c.text : c.text;
+    }
+    const get = k => (row[k] || '').trim(), job = get('functie');
+    shifts.push({where: `rij ${++n}`, date: parseDate(get('datum')), name: cleanName(get('medewerker')),
+      job: job === '-' ? '' : job, start: parseTime(get('starttijd')), end: parseTime(get('eindtijd')),
+      rawStart: get('starttijd'), rawEnd: get('eindtijd')});
+  }
+  return shifts;
+}
+
+// Dish-planning: datumregel, dan per groep 'NBC > Afdeling > ...' regels Start | Medewerker (+ telefoon) | Opmerking.
+// Dish geeft geen eindtijd.
+function parseDish(rows) {
+  let date = null, dept = '', n = 0;
+  const shifts = [];
+  for (const cells of rows) {
+    const first = cells[0] ? cells[0].text : '';
+    const d = cells.length === 1 ? parseLongDate(first) : null;
+    if (d) { date = d; continue; }
+    if (first.includes('>')) { const parts = first.split('>').map(p => p.trim()); dept = parts[1] || parts[0]; continue; }
+    if (!/^\d{1,2}:\d{2}$/.test(first)) continue;
+    n++;
+    if (!date) return {errors: ['Geen datum gevonden boven de diensten.']};
+    shifts.push({where: `rij ${n}`, date, name: cleanName(cells[1] ? cells[1].text : ''), job: dept,
+      start: parseTime(first), end: null, noEnd: true, rawStart: first, rawEnd: ''});
+  }
+  return {shifts};
+}
+
+async function parsePdf(buf) {
+  let rows;
+  try { rows = await pdfRows(buf); }
+  catch (e) { return {errors: ['PDF kon niet gelezen worden: ' + e.message]}; }
+  if (rows.some(c => hasAll(c, ['datum', 'medewerker', 'functie', 'starttijd', 'eindtijd']))) {
+    const shifts = parsePiekfijn(rows);
+    const bad = shifts.filter(s => !s.date).map(s => `${s.where}: datum niet herkend.`);
+    return {party: PARTY.piekfijn, shifts: shifts.filter(s => s.date), bad};
+  }
+  if (rows.some(c => hasAll(c, ['start', 'medewerker', 'opmerking']))) {
+    const res = parseDish(rows);
+    return res.errors ? res : {party: PARTY.dish, shifts: res.shifts, bad: []};
+  }
+  return {errors: ['Deze PDF is niet herkend. Gebruik de Piekfijn-presentielijst of de Dish-planning (dagoverzicht).']};
+}
+
+async function addFiles(list) {
+  const errors = [];
+  for (const file of list) {
+    try {
+      const isPdf = /\.pdf$/i.test(file.name) || file.type === 'application/pdf';
+      const res = isPdf ? await parsePdf(await file.arrayBuffer()) : parseTemper(await readText(file));
+      if (!res.errors && !res.shifts.length) res.errors = ['Geen bruikbare diensten gevonden.', ...res.bad];
+      if (res.errors) { errors.push([file.name, res.errors]); continue; }
+      const id = nextId++;
+      res.shifts.forEach(s => { s.party = res.party; s.file = id; s.where = `${file.name}, ${s.where}`; });
+      files.push({id, fileName: file.name, party: res.party, shifts: res.shifts, bad: res.bad});
+    } catch (e) {
+      errors.push([file.name, ['Bestand kon niet gelezen worden: ' + e.message]]);
+    }
+  }
+  $('parseErrors').innerHTML = errors.map(([name, list]) =>
+    `<div class="msg bad"><strong>${esc(name)} kan niet gebruikt worden.</strong><ul>${list.map(e => `<li>${esc(e)}</li>`).join('')}</ul></div>`).join('');
+  $('done').innerHTML = '';
+  refresh();
+}
+
+function allShifts() { return files.flatMap(f => f.shifts); }
+
+function refresh() {
+  const fl = $('files');
+  fl.classList.toggle('hidden', !files.length);
+  fl.innerHTML = files.map(f => `<li><span class="pill">${esc(f.party)}</span><span class="name">${esc(f.fileName)}</span>
+    <span class="muted">${plural(f.shifts.length)}</span><button type="button" data-remove="${f.id}">Verwijderen</button>${
+    f.bad.length ? `<div class="msg bad" style="flex-basis:100%;margin-top:4px">Overgeslagen: ${f.bad.map(esc).join(' ')}</div>` : ''}</li>`).join('');
+  if (!files.length) { state = null; ['stepDate', 'stepUnknown', 'stepPreview'].forEach(id => $(id).classList.add('hidden')); return; }
 
   const dates = new Map();
-  for (const s of shifts) dates.set(s.date, (dates.get(s.date) || 0) + 1);
-  state = {fileName, shifts, dates, dateErrors: bad};
-  showParseErrors([]);
-  $('fileinfo').innerHTML = `<span class="pill">${esc(fileName)}</span> ${plural(shifts.length)} op ${dates.size} ${dates.size === 1 ? 'datum' : 'datums'}`;
-  $('fileinfo').classList.remove('hidden');
-
-  const sel = $('date');
+  for (const s of allShifts()) dates.set(s.date, (dates.get(s.date) || 0) + 1);
+  const sel = $('date'), prev = sel.value;
   const sorted = [...dates.keys()].sort();
   sel.innerHTML = (sorted.length > 1 ? '<option value="">Kies de datum…</option>' : '') +
     sorted.map(d => `<option value="${d}">${esc(longDate(d))} — ${plural(dates.get(d))}</option>`).join('');
-  $('accepted').checked = false;
+  if (dates.has(prev)) sel.value = prev;
+  const hasTemper = files.some(f => f.party === PARTY.temper);
+  $('acceptedBox').classList.toggle('hidden', !hasTemper);
   $('stepDate').classList.remove('hidden');
-  $('done').innerHTML = '';
+  state = {dates};
   render();
-}
-function showParseErrors(list) {
-  $('parseErrors').innerHTML = list.length
-    ? `<div class="msg bad"><strong>Dit bestand kan niet gebruikt worden.</strong><ul>${list.map(e => `<li>${esc(e)}</li>`).join('')}</ul></div>` : '';
-  if (list.length) { state = null; ['stepDate', 'stepUnknown', 'stepPreview', 'fileinfo'].forEach(id => $(id).classList.add('hidden')); }
 }
 function longDate(d) {
   const [y, m, day] = d.split('-').map(Number);
@@ -268,27 +413,32 @@ function longDate(d) {
 }
 
 // ---------- Indelen en controleren ----------
-function sectionFor(job) { return MAPPING[job] || extraMapping[job] || null; }
+function isKnown(job) { return Boolean(MAPPING[job]) || SECTION_NAMES.has(job); }
+function sectionFor(job) { return MAPPING[job] || (SECTION_NAMES.has(job) ? job : null) || extraMapping[job] || null; }
 
 function evaluate() {
   const date = $('date').value;
-  const day = date ? state.shifts.filter(s => s.date === date) : [];
-  const problems = [], unknown = new Map(), seen = new Map();
+  const day = date ? allShifts().filter(s => s.date === date) : [];
+  const problems = [], notes = [], unknown = new Map(), seen = new Map();
   const groups = Object.fromEntries(SECTIONS.map(s => [s[0], []]));
   for (const s of day) {
-    if (!s.name) problems.push(`Regel ${s.line}: naam ontbreekt (dienst nog niet ingevuld?).`);
-    if (!s.start || !s.end) problems.push(`Regel ${s.line}: tijd "${s.rawStart} - ${s.rawEnd}" niet herkend.`);
-    const key = [s.name, s.job, s.start, s.end].join('|');
-    if (seen.has(key)) problems.push(`Regel ${s.line} is een exacte kopie van regel ${seen.get(key)} (${s.name}, ${s.start} - ${s.end}). Controleer de export.`);
-    else seen.set(key, s.line);
+    if (!s.name) problems.push(`${s.where}: naam ontbreekt (dienst nog niet ingevuld?).`);
+    if (!s.start || (!s.end && !s.noEnd)) problems.push(`${s.where}: tijd "${s.rawStart} - ${s.rawEnd}" niet herkend.`);
+    const key = [s.name.toLowerCase(), s.start, s.end].join('|');
+    if (seen.has(key)) problems.push(`${s.where} is dezelfde dienst als ${seen.get(key)} (${s.name}, ${timeText(s)}). Staat deze persoon in twee exports? Verwijder de dubbele.`);
+    else seen.set(key, s.where);
     const sec = sectionFor(s.job);
-    if (!MAPPING[s.job]) unknown.set(s.job, (unknown.get(s.job) || 0) + 1);
+    if (!isKnown(s.job)) unknown.set(s.job, (unknown.get(s.job) || 0) + 1);
     if (sec && groups[sec]) groups[sec].push(s);
   }
   for (const list of Object.values(groups))
     list.sort((a, b) => (a.start || '').localeCompare(b.start || '') || a.name.localeCompare(b.name, 'nl', {sensitivity: 'base'}) || (a.end || '').localeCompare(b.end || ''));
+  if (date) for (const f of files)
+    if (!f.shifts.some(s => s.date === date)) notes.push(`${f.fileName} (${f.party}) heeft geen diensten op deze datum. Klopt de export?`);
+  const noEnd = day.filter(s => s.noEnd).length;
+  if (noEnd) notes.push(`Dish geeft geen eindtijd: bij ${plural(noEnd)} staat alleen de begintijd ("vanaf …").`);
   const unassigned = [...unknown.keys()].filter(j => !sectionFor(j));
-  return {date, day, groups, problems, unknown, unassigned};
+  return {date, day, groups, problems, notes, unknown, unassigned};
 }
 
 function render() {
@@ -310,16 +460,21 @@ function render() {
 
   const blockers = [...ev.problems];
   if (ev.unassigned.length) blockers.push(`Kies eerst een afdeling voor: ${ev.unassigned.join(', ')}.`);
-  if (!$('accepted').checked) blockers.push('Bevestig bij stap 2 dat de export alleen geaccepteerde mensen bevat.');
-  $('problems').innerHTML = blockers.length
-    ? `<div class="msg bad"><strong>Nog niet klaar:</strong><ul>${blockers.map(e => `<li>${esc(e)}</li>`).join('')}</ul></div>` : '';
+  if (files.some(f => f.party === PARTY.temper) && !$('accepted').checked)
+    blockers.push('Bevestig bij stap 2 dat de Temper-export alleen geaccepteerde mensen bevat.');
+  $('problems').innerHTML = (blockers.length
+    ? `<div class="msg bad"><strong>Nog niet klaar:</strong><ul>${blockers.map(e => `<li>${esc(e)}</li>`).join('')}</ul></div>` : '') +
+    (ev.notes.length ? `<div class="msg info"><ul style="margin:0">${ev.notes.map(e => `<li>${esc(e)}</li>`).join('')}</ul></div>` : '');
   const total = Object.values(ev.groups).reduce((n, l) => n + l.length, 0);
+  const perParty = [...PARTIES].map(p => [p, ev.day.filter(s => s.party === p).length]).filter(([, n]) => n);
+  const skipped = allShifts().length - ev.day.length;
   $('summary').innerHTML = `<p><strong>${plural(total)}</strong> op ${esc(longDate(ev.date))}` +
-    (state.dates.size > 1 ? ` <span class="muted">(${plural(state.shifts.length - ev.day.length)} op andere datums ${state.shifts.length - ev.day.length === 1 ? 'wordt' : 'worden'} overgeslagen)</span>` : '') + '</p>';
+    (perParty.length > 1 ? ` <span class="muted">(${perParty.map(([p, n]) => `${esc(p)} ${n}`).join(', ')})</span>` : '') +
+    (skipped ? ` <span class="muted">· ${plural(skipped)} op andere datums ${skipped === 1 ? 'wordt' : 'worden'} overgeslagen</span>` : '') + '</p>';
   $('sections').innerHTML = SECTIONS.map(([sec]) => {
     const list = ev.groups[sec];
     return `<div class="sec"><h3><span>${esc(sec)}</span><span>${list.length}</span></h3><table>${
-      list.length ? list.map(s => `<tr><td>${esc(s.name)}</td><td>${s.start} - ${s.end}</td></tr>`).join('')
+      list.length ? list.map(s => `<tr><td>${esc(s.name)}<span class="tag">${esc(s.party)}</span></td><td>${esc(timeText(s))}</td></tr>`).join('')
         : '<tr><td class="empty" colspan="2">Geen diensten (2 lege regels)</td></tr>'}</table></div>`;
   }).join('');
   $('download').disabled = blockers.length > 0;
@@ -348,7 +503,7 @@ function buildSheet(ev) {
     for (let i = 0; i < Math.max(CAPACITY, list.length); i++) {
       const s = list[i];
       out.set(row++, {from: first + Math.min(i, CAPACITY - 1), data: true,
-        values: s ? [s.name, `${s.start} - ${s.end}`, sec, EXTERNAL_PARTY] : null});
+        values: s ? [s.name, timeText(s), sec, s.party] : null});
     }
   }
   const lastRow = Math.max(row - 1, lastTemplateRow);
@@ -413,7 +568,7 @@ function verify(xml, ev) {
   for (const r of doc.getElementsByTagNameNS(NS, 'row')) {
     const a = [...r.getElementsByTagNameNS(NS, 'c')].find(c => colOf(c.getAttribute('r')) === 'A');
     const d = [...r.getElementsByTagNameNS(NS, 'c')].find(c => colOf(c.getAttribute('r')) === 'D');
-    if (d && d.textContent === EXTERNAL_PARTY) {
+    if (d && PARTIES.has(d.textContent)) {
       names.push(a.textContent);
       if (r.getAttribute('ht') !== '30') throw new Error(`Rij ${r.getAttribute('r')} heeft niet de vaste hoogte van 30.`);
     }
@@ -459,8 +614,8 @@ function download() {
   try {
     const {xml} = buildSheet(ev);
     const count = verify(xml, ev);
-    const files = Object.entries(TEMPLATE).map(([name, content]) => [name, name === 'xl/worksheets/sheet1.xml' ? xml : content]);
-    const url = URL.createObjectURL(zip(files));
+    const parts = Object.entries(TEMPLATE).map(([name, content]) => [name, name === 'xl/worksheets/sheet1.xml' ? xml : content]);
+    const url = URL.createObjectURL(zip(parts));
     const a = document.createElement('a');
     a.href = url; a.download = `Flexlijst-${ev.date}.xlsx`;
     document.body.appendChild(a); a.click(); a.remove();
@@ -472,18 +627,19 @@ function download() {
 }
 
 // ---------- Events ----------
-async function handleFile(file) {
-  if (!file) return;
-  try { load(file.name, await readFile(file)); }
-  catch (e) { showParseErrors(['Bestand kon niet gelezen worden: ' + e.message]); }
-}
-$('file').addEventListener('change', e => handleFile(e.target.files[0]));
+$('file').addEventListener('change', e => { addFiles([...e.target.files]); e.target.value = ''; });
 const drop = $('drop');
 ['dragenter', 'dragover'].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.add('over'); }));
 ['dragleave', 'drop'].forEach(t => drop.addEventListener(t, e => { e.preventDefault(); drop.classList.remove('over'); }));
-drop.addEventListener('drop', e => handleFile(e.dataTransfer.files[0]));
+drop.addEventListener('drop', e => addFiles([...e.dataTransfer.files]));
 window.addEventListener('dragover', e => e.preventDefault());
 window.addEventListener('drop', e => e.preventDefault());
+$('files').addEventListener('click', e => {
+  const id = e.target.dataset.remove;
+  if (!id) return;
+  files = files.filter(f => f.id !== +id);
+  $('done').innerHTML = ''; refresh();
+});
 $('date').addEventListener('change', () => { $('done').innerHTML = ''; render(); });
 $('accepted').addEventListener('change', render);
 $('unknownList').addEventListener('change', e => {
@@ -494,10 +650,11 @@ $('unknownList').addEventListener('change', e => {
 });
 $('download').addEventListener('click', download);
 $('reset').addEventListener('click', () => {
-  state = null; $('file').value = '';
-  ['stepDate', 'stepUnknown', 'stepPreview', 'fileinfo'].forEach(id => $(id).classList.add('hidden'));
+  files = []; $('file').value = ''; $('accepted').checked = false;
   $('parseErrors').innerHTML = ''; $('done').innerHTML = '';
+  refresh();
 });
 </script>
+<!--__PDFJS__-->
 </body>
 </html>

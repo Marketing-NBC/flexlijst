@@ -3,4 +3,5 @@ __pycache__/
 # Nooit exports of ingevulde flexlijsten in deze openbare repository
 *.csv
 *.xlsx
+*.pdf
 !bron/flexlijst-template.xlsx

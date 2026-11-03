@@ -180,6 +180,8 @@ function cleanName(s) {
   return s.replace(/\S+@\S+/g, ' ').replace(/\+?\d[\d\s().-]{6,}\d/g, ' ').replace(/^\s*zzp\b\s*/i, '').replace(/\s+/g, ' ').trim();
 }
 function timeText(s) { return s.noEnd ? `vanaf ${s.start}` : `${s.start} - ${s.end}`; }
+// Piekfijn zet '-' als naam bij een plek waar (nog) niemand aan is toegewezen: geen persoon, wel een regel op de lijst.
+function isOpenSpot(s) { return /^[-–—]+$/.test(s.name); }
 
 // ---------- CSV (Temper) ----------
 function detectDelimiter(text) {
@@ -425,7 +427,8 @@ function evaluate() {
     if (!s.name) problems.push(`${s.where}: naam ontbreekt (dienst nog niet ingevuld?).`);
     if (!s.start || (!s.end && !s.noEnd)) problems.push(`${s.where}: tijd "${s.rawStart} - ${s.rawEnd}" niet herkend.`);
     const key = [s.name.toLowerCase(), s.start, s.end].join('|');
-    if (seen.has(key)) problems.push(`${s.where} is dezelfde dienst als ${seen.get(key)} (${s.name}, ${timeText(s)}). Staat deze persoon in twee exports? Verwijder de dubbele.`);
+    if (isOpenSpot(s)) { /* open plekken mogen vaker voorkomen */ }
+    else if (seen.has(key)) problems.push(`${s.where} is dezelfde dienst als ${seen.get(key)} (${s.name}, ${timeText(s)}). Staat deze persoon in twee exports? Verwijder de dubbele.`);
     else seen.set(key, s.where);
     const sec = sectionFor(s.job);
     if (!isKnown(s.job)) unknown.set(s.job, (unknown.get(s.job) || 0) + 1);
@@ -435,6 +438,8 @@ function evaluate() {
     list.sort((a, b) => (a.start || '').localeCompare(b.start || '') || a.name.localeCompare(b.name, 'nl', {sensitivity: 'base'}) || (a.end || '').localeCompare(b.end || ''));
   if (date) for (const f of files)
     if (!f.shifts.some(s => s.date === date)) notes.push(`${f.fileName} (${f.party}) heeft geen diensten op deze datum. Klopt de export?`);
+  const open = day.filter(isOpenSpot).length;
+  if (open) notes.push(`${open === 1 ? '1 plek is' : `${open} plekken zijn`} nog niet aan iemand toegewezen; ${open === 1 ? 'die staat' : 'die staan'} met een "-" op de lijst.`);
   const noEnd = day.filter(s => s.noEnd).length;
   if (noEnd) notes.push(`Dish geeft geen eindtijd: bij ${plural(noEnd)} staat alleen de begintijd ("vanaf …").`);
   const unassigned = [...unknown.keys()].filter(j => !sectionFor(j));

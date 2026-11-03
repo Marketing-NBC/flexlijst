@@ -8,7 +8,7 @@ Bundelt de exports van de uitzendbureaus tot één standaard NBC-flexlijst in Ex
 | Piekfijn | Presentielijst (PDF, *Afdrukken → Opslaan als PDF*) | Piekfijn |
 | Dish | Dagplanning ZZP'ers (PDF) | Dish (ZZP) |
 
-Sleep één of meer bestanden tegelijk op de pagina; de pagina herkent zelf welk bureau het is. Dish geeft geen eindtijd, daar komt *vanaf 08:00* te staan. Staat dezelfde persoon met dezelfde tijden in twee exports, dan blokkeert de pagina tot de dubbele export is verwijderd.
+Sleep één of meer bestanden tegelijk op de pagina; de pagina herkent zelf welk bureau het is. Dish geeft geen eindtijd, daar komt *vanaf 08:00* te staan. Staat dezelfde persoon met dezelfde tijden in twee exports, dan blokkeert de pagina tot de dubbele export is verwijderd. Plekken die in Piekfijn nog niet aan iemand zijn toegewezen (naam *-*) komen gewoon als regel met een - op de lijst en tellen niet als dubbel.
 
 **Gebruiken:** https://marketing-nbc.github.io/flexlijst/
 
